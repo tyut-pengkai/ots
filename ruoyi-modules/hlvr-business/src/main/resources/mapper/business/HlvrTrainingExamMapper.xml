@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+    PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.dromara.mapper.HlvrTrainingExamMapper">
+<!--    <resultMap id="getData" type="org.dromara.domain.vo.HlvrTrainingExamVo">-->
+<!--        <id property="id" column="id"/>-->
+<!--        <result property="deptId" column="dept_id"/>-->
+<!--        <collection column="id" property="details" ofType="org.dromara.domain.vo.HlvrTrainingExamDetailVo" select="queryDetail">-->
+
+<!--        </collection>-->
+<!--    </resultMap>-->
+<!--    <select id="queryPageList" resultMap="getData">-->
+<!--        with temp as (-->
+<!--            select-->
+<!--                *,-->
+<!--                ROW_NUMBER() OVER (ORDER BY hte.update_time DESC) AS RowNum-->
+<!--            from hlvr_training_exam hte-->
+<!--            where  hte.del_flag = 0-->
+<!--              and dept_id = #{deptId}-->
+<!--        )-->
+<!--        SELECT-->
+<!--            *-->
+<!--        FROM temp-->
+<!--        WHERE RowNum BETWEEN ((#{current} -1) * #{size} + 1 ) AND (#{current} * #{size})-->
+<!--    </select>-->
+    <select id="queryDetail" resultType="org.dromara.domain.vo.HlvrTrainingExamDetailVo">
+        with temp as (
+            select hted.*, hte.name as 'htName',hte.dept_id,hsc.name as 'name',hsc.initial_ZB 'initialZB',
+            ROW_NUMBER() OVER (ORDER BY hte.update_time DESC) AS RowNum
+            from hlvr_training_exam_detail hted
+            left join hlvr_training_exam hte on hted.ht_id = hte.id
+            join hlvr_sop_card hsc on hsc.id = hted.hsc_id and hsc.del_flag=0
+            where hted.del_flag = 0 and hte.del_flag = 0 and hte.dept_id = #{deptId}
+            and hte.`type` =#{type}
+        )
+        SELECT
+            *
+        FROM temp
+        WHERE RowNum BETWEEN ((#{current} -1) * #{size} + 1 ) AND (#{current} * #{size})
+        order by temp.create_time desc
+    </select>
+    <select id="queryTotal" resultType="long">
+        SELECT COUNT(*)
+        from hlvr_training_exam_detail hted
+                 left join hlvr_training_exam hte on hted.ht_id = hte.id
+        where hted.del_flag = 0 and hte.del_flag = 0 and dept_id = #{deptId}
+          and hte.`type` =#{type}
+    </select>
+
+    <select id="queryExamDetail" resultType="org.dromara.domain.vo.HlvrTrainingExamDetailVo">
+        with temp as (
+            select hted.*, hte.name as 'htName',hte.dept_id,
+            ROW_NUMBER() OVER (ORDER BY hte.update_time DESC) AS RowNum
+            from hlvr_training_exam_detail hted
+            left join hlvr_training_exam hte on hted.ht_id = hte.id
+            join hlvr_sop_card hsc on hsc.id = hted.hsc_id and hsc.del_flag=0
+            where hted.del_flag = 0 and hte.del_flag = 0 and hte.dept_id = #{deptId} and hte.`type` =#{type}
+        ), already as (
+            select hted_id,
+            create_time &lt; NOW() - INTERVAL 30 minute as 'complete'
+            from hlvr_te_batch htb where create_by = #{userId}
+        )
+        SELECT
+            *,
+            case when a.complete is null then '未开始' else '进行中' end as 'status'
+        FROM temp t
+             left join already a on t.id = a.hted_id
+        WHERE
+            (a.complete != 1 or a.complete is null)
+            and RowNum BETWEEN ((#{current} -1) * #{size} + 1 ) AND (#{current} * #{size})
+        order by t.create_time desc
+    </select>
+    <select id="queryExamTotal" resultType="long">
+        with temp as (
+            select hted.*, hte.name as 'htName',hte.dept_id,
+                   ROW_NUMBER() OVER (ORDER BY hte.update_time DESC) AS RowNum
+            from hlvr_training_exam_detail hted
+                     left join hlvr_training_exam hte on hted.ht_id = hte.id
+                     join hlvr_sop_card hsc on hsc.id = hted.hsc_id and hsc.del_flag=0
+            where hted.del_flag = 0 and hte.del_flag = 0 and hte.dept_id = #{deptId} and hte.`type` =#{type}
+        ), already as (
+            select hted_id,
+                   create_time &lt; NOW() - INTERVAL 30 minute as 'status'
+            from hlvr_te_batch htb where create_by = #{userId}
+        )
+        SELECT COUNT(*)
+        from temp t
+            left join already a on t.id = a.hted_id
+        WHERE
+            a.status != 1 or a.status is null
+    </select>
+</mapper>

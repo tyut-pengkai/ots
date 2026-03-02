@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+    PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.dromara.mapper.HlvrSopCardStepOptMapper">
+    <select id="getFirstStepVo" resultType="org.dromara.domain.vo.HlvrSopCardStepOptVo">
+        select hscso.*, hscsg.group_name  from hlvr_sop_card hsc
+            left join hlvr_sop_card_step_group hscsg on hsc.id = hscsg.hsc_id
+            left join hlvr_sop_card_step_opt hscso on hscsg.id = hscso.hscsg_id
+        where hsc.id= #{cardId}
+        and hscsg.del_flag = 0
+        and hscso.del_flag = 0
+        order by hscsg.indexing, hscso.indexing limit 1
+    </select>
+    <select id="getNextStepVo" resultType="org.dromara.domain.vo.HlvrSopCardStepOptVo">
+        with temp as (
+            SELECT o.*,g.indexing as 'groupIndex',
+            ROW_NUMBER() OVER (order by g.indexing, o.indexing) AS rn
+            FROM hlvr_sop_card_step_opt o
+            JOIN hlvr_sop_card_step_group g ON g.id = o.hscsg_id and g.del_flag = 0
+            JOIN hlvr_sop_card_step_group g2 ON g2.hsc_id = g.hsc_id and g2.del_flag = 0
+            WHERE o.del_flag = 0 and
+            g2.id = (SELECT hscsg_id FROM hlvr_sop_card_step_opt WHERE id = #{currentStepId})
+        ) select *
+        from temp
+        where del_flag = 0
+        and rn> (SELECT rn FROM temp WHERE id = #{currentStepId}) limit 1
+    </select>
+    <update id="flushOptIndex">
+        update hlvr_sop_card_step_opt
+        set indexing = indexing + 10
+        where hscsg_id = #{groupId}
+        <if test="insertLocal == 0">
+            and indexing >= #{indexing}
+        </if>
+        <if test="insertLocal == 1">
+            and indexing > #{indexing}
+        </if>
+    </update>
+    <select id="getStepVosOrderBy" resultType="org.dromara.domain.vo.HlvrSopCardStepOptVo">
+        SELECT *
+        FROM hlvr_sop_card_step_opt hscso
+                 JOIN hlvr_sop_card_step_group hscsg ON hscso.hscsg_id = hscsg.id
+        WHERE hscsg.hsc_id = #{cardId}
+        and hscso.del_flag = 0
+        and hscsg.del_flag = 0
+        ORDER BY hscsg.indexing ${order}, hscso.indexing ${order};
+    </select>
+</mapper>

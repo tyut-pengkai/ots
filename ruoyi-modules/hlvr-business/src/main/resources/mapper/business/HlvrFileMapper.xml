@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+    PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.dromara.mapper.HlvrFileMapper">
+    <select id="selectList" resultType="org.dromara.domain.vo.HlvrFileVo">
+        with temp as (
+            select
+                hf.*,
+                ha.name,
+                ha.suffix,
+                ha.`path`,
+                ha.update_name,
+                ROW_NUMBER() OVER (ORDER BY hf.update_time DESC) AS RowNum
+            from hlvr_file hf left join hlvr_attachment ha on hf.id =ha.business_id
+            where ha.del_flag =0 and hf.del_flag =0
+            <if test="param.assetType !=null and param.assetType !=''">
+               and hf.asset_type =#{param.assetType}
+            </if>
+        )
+        SELECT
+            *
+        FROM temp
+        WHERE RowNum BETWEEN ((#{current} -1) * #{size} + 1 ) AND (#{current} * #{size})
+    </select>
+    <select id="queryTotal" resultType="long">
+        SELECT COUNT(*)
+        FROM hlvr_file hf
+                 LEFT JOIN hlvr_attachment ha ON hf.id = ha.business_id
+        WHERE ha.del_flag = 0 AND hf.del_flag = 0
+        <if test="param.assetType !=null and param.assetType !=''">
+            and hf.asset_type =#{param.assetType}
+        </if>
+    </select>
+
+    <select id="queryById" resultType="org.dromara.domain.vo.HlvrFileVo">
+        select
+            hf.*,
+            ha.name,
+            ha.suffix,
+            ha.`path`,
+            ha.update_name
+        from hlvr_file hf left join hlvr_attachment ha on hf.id =ha.business_id
+        where ha.del_flag =0 and hf.del_flag =0 and hf.id= #{id}
+    </select>
+</mapper>

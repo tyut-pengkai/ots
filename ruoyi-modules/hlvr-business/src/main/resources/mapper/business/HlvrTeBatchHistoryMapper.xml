@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+    PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.dromara.mapper.HlvrTeBatchHistoryMapper">
+    <select id="queryHistory" resultType="org.dromara.domain.vo.HlvrTeBatchHistoryVo">
+        select
+            hte.id as hte_id,
+            hte.name,
+            hte.dept_id,
+            (SELECT COUNT(*) FROM hlvr_training_exam_detail hted WHERE hte.id = hted.ht_id  AND hted.del_flag = 0) AS optCardNum,
+            (SELECT COUNT(*) FROM hlvr_te_batch htb WHERE htb.hted_id in (select id from hlvr_training_exam_detail hted where ht_id = hte.id )) AS num,
+            (select COUNT(DISTINCT create_by) from hlvr_te_batch where hted_id in (select id from hlvr_training_exam_detail hted where ht_id = hte.id )) AS people,
+            (SELECT COUNT(*) FROM sys_user sd  WHERE sd.dept_id  = hte.dept_id  AND sd.del_flag = 0) AS peopleAcc
+        from hlvr_training_exam hte
+        where hte.del_flag = 0
+        <if test="param.deptId != null">
+            and dept_id = #{param.deptId}
+        </if>
+        <if test="param.type != null and param.type != ''">
+            and type = #{param.type}
+        </if>
+        <if test="param.name != null and param.name!= ''">
+            and name like '%${param.name}%'
+        </if>
+        ORDER BY hte.update_time desc
+    </select>
+
+    <select id="getExamPeople" resultType="org.dromara.domain.vo.HlvrTeBatchHistoryVo">
+        select
+            card.name ,
+            htb.id as batch_id,
+            hted.hsc_id,
+            htb.create_time,
+            htb.create_by
+        from hlvr_te_batch htb
+         join hlvr_training_exam_detail hted on htb.hted_id = hted.id
+         join hlvr_sop_card card on hted.hsc_id = card.id
+        where hted_id in (
+            select id
+            from hlvr_training_exam_detail hted
+            where hted.ht_id = #{hteId}
+        )
+        ORDER BY htb.create_time  desc
+    </select>
+    <select id="peopleBatch" resultType="org.dromara.domain.vo.HlvrTeBatchHistoryVo">
+        select
+            id as batchId,
+            htb.create_time,
+            (select sum(score) from hlvr_sop_card_step_opt_history hscsoh where hscsoh.batch_id =htb.id and hscsoh.del_flag = 0) as total_score,
+            TIMESTAMPDIFF(SECOND, create_time, end_time) AS cost_time
+        from hlvr_te_batch htb
+        where
+            htb.del_flag = 0
+            and htb.hte_id = #{id}
+          and create_by  = #{createBy} order by create_time DESC
+    </select>
+
+    <select id="optHistoryDetail" resultType="org.dromara.domain.vo.HlvrSopCardStepOptHistoryVo">
+        select hscsoh.create_time,
+               hscsoh.step_name as groupName,
+               hscsoh.opt_content as optContent,
+               hscsoh.score,
+               TIMESTAMPDIFF(SECOND, hscsoh.create_time, hscsoh.end_time) AS cost_time
+        from hlvr_sop_card_step_opt_history hscsoh
+        where batch_id=#{batchId}
+          and hscsoh.del_flag = 0
+        ORDER BY create_time
+    </select>
+
+    <select id="getOpts" resultType="org.dromara.domain.vo.HlvrSopCardStepOptHistoryVo">
+        select hscso.hscsg_id,
+               hscsg.group_name,hscso.opt_content
+        from hlvr_sop_card_step_group hscsg
+                 LEFT JOIN hlvr_sop_card_step_opt hscso ON hscso.hscsg_id=hscsg.id
+        where hsc_id=#{hscId}
+          and hscsg.del_flag = 0
+          and hscso.del_flag = 0
+        ORDER BY hscsg.indexing, hscso.indexing
+    </select>
+
+    <select id="queryPersonal" resultType="org.dromara.domain.vo.HlvrTeBatchHistoryVo">
+        with temp as (
+            SELECT
+                hte_id,
+                COUNT(*) AS num,
+                ROW_NUMBER() OVER (ORDER BY MAX(htb.update_time) DESC) AS RowNum,
+                hte.name
+            FROM hlvr_te_batch htb
+                     left join hlvr_training_exam hte on htb.hte_id = hte.id
+            WHERE htb.del_flag = 0 and htb.create_by= #{createBy}
+            GROUP BY hte_id,hte.name
+        )
+        SELECT
+            *
+        FROM temp
+        WHERE RowNum BETWEEN ((#{current} -1) * #{size} + 1 ) AND (#{current} * #{size})
+    </select>
+
+    <select id="queryPersonalTotal" resultType="long">
+        SELECT
+            count(hte_id)
+        FROM hlvr_te_batch
+        WHERE del_flag = 0 and create_by= #{createBy}
+    </select>
+</mapper>
